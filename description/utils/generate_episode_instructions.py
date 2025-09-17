@@ -1,5 +1,4 @@
 import json
-import pdb
 import re
 from typing import List, Dict, Any
 import os
@@ -15,7 +14,6 @@ def extract_placeholders(instruction: str) -> List[str]:
     """Extract all placeholders of the form {X} from an instruction."""
     placeholders = re.findall(r"{([^}]+)}", instruction)
     return placeholders
-
 
 def filter_instructions(instructions: List[str], episode_params: Dict[str, str]) -> List[str]:
     """
@@ -34,8 +32,7 @@ def filter_instructions(instructions: List[str], episode_params: Dict[str, str])
         # Get all arm-related parameters (single lowercase letters)
         arm_params = {key for key in stripped_episode_params.keys() if len(key) == 1 and "a" <= key <= "z"}
         non_arm_params = set(stripped_episode_params.keys()) - arm_params
-        # print("placeholders",placeholders)
-        # print("stripped_episode_params.keys()",stripped_episode_params.keys())
+
         # Accept if we have exact match OR if the only missing parameters are arm parameters
         if set(placeholders) == set(stripped_episode_params.keys()) or (
                 # Special case: accept if the only difference is missing arm parameters
@@ -184,11 +181,6 @@ def save_episode_descriptions(task_name: str, setting: str, generated_descriptio
                 indent=2,
             )
 
-        # print(
-        #     f"Saved seen {len(episode_desc.get('seen',[]))}, unseen {len(episode_desc.get('unseen',[]))} descriptions to {output_file}"
-        # )
-
-
 def generate_episode_descriptions(task_name: str, episodes: List[Dict[str, str]], max_descriptions: int = 1000000):
     """
     Generate descriptions for episodes by replacing placeholders in instructions with parameter values.
@@ -218,12 +210,12 @@ def generate_episode_descriptions(task_name: str, episodes: List[Dict[str, str]]
         seen_episode_descriptions = []
         flag_seen = True
         while (len(seen_episode_descriptions) < max_descriptions and flag_seen and filtered_seen_instructions):
+            
             for instruction in filtered_seen_instructions:
                 if len(seen_episode_descriptions) >= max_descriptions:
                     flag_seen = False
                     break
                 description = replace_placeholders(instruction, episode)
-                # print(f"Seen: {description}")
                 seen_episode_descriptions.append(description)
 
         # Generate unseen descriptions by replacing placeholders
@@ -235,7 +227,6 @@ def generate_episode_descriptions(task_name: str, episodes: List[Dict[str, str]]
                     flag_unseen = False
                     break
                 description = replace_placeholders_unseen(instruction, episode)
-                # print(f"Unseen: {description}")
                 unseen_episode_descriptions.append(description)
 
         all_generated_descriptions.append({
@@ -243,8 +234,6 @@ def generate_episode_descriptions(task_name: str, episodes: List[Dict[str, str]]
             "seen": seen_episode_descriptions,
             "unseen": unseen_episode_descriptions,
         })
-
-        # print(f"Episode {i}: Generated {len(seen_episode_descriptions)} seen descriptions, {len(unseen_episode_descriptions)} unseen descriptions")
 
     return all_generated_descriptions
 

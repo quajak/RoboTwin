@@ -126,7 +126,15 @@ def create_task_config(task_config_path, task_name):
     """
     with open(os.path.join(SCRIPT_PATH, "_task_config_template.json"), "r") as file:
         task_config_template = json.load(file)
+
+    # Modify task_name
     task_config_template["task_name"] = task_name
+
+    # Convert field format
+    if isinstance(task_config_template.get("embodiment"), str):
+        task_config_template["embodiment"] = [task_config_template["embodiment"]]
+
+    # Save as yml
     with open(task_config_path, "w") as f:
         yaml.dump(task_config_template, f, default_flow_style=False, sort_keys=False)
 
@@ -258,7 +266,7 @@ def run(TASK_ENV, args, check_num=10):
                 run_records.append("success!")
             else:
                 if not TASK_ENV.plan_success:
-                    if hasattr(TASK_ENV, 'lefft_plan_success') and not TASK_ENV.lefft_plan_success:
+                    if hasattr(TASK_ENV, 'left_plan_success') and not TASK_ENV.lefft_plan_success:
                         error_id = 1
                         run_records.append(error_list[1])
                     elif hasattr(TASK_ENV, 'right_plan_success') and not TASK_ENV.right_plan_success:
