@@ -170,6 +170,8 @@ class Pi0(_model.BaseModel):
         tokens = []
         # embed images
         for name in obs.images:
+            if name == "attention_mask":
+                continue
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
 
             tokens.append(image_tokens)

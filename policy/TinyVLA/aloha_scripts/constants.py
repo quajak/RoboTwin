@@ -1,11 +1,11 @@
-DATA_DIR = "/data/robotiwin/policy/TinyVLA/data"
+DATA_DIR = "/home/gerigkja/RoboTwin/policy/TinyVLA/data"
 PRETRAIN_DIR = '/data/h5py2'
 LOCAL_DATA_DIR = '/home/data'
 
 TASK_CONFIGS = {
-    "task_name_you_test": {
-        'dataset_dir': [DATA_DIR + "/sim-/aloha-agilex-1-m1_b1_l1_h0.03_c0_D435-100"],
-        'episode_len': 500,
+    "place_empty_cup": {
+        'dataset_dir': [DATA_DIR + "/sim-place_empty_cup/demo_clean-100"],
+        'episode_len': 300,
         'camera_names': ['cam_high', 'cam_left_wrist', 'cam_right_wrist'],
         "sample_weights": [1, 1]
     },

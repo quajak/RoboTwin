@@ -13,7 +13,7 @@ from torchvision.transforms.functional import to_pil_image, to_tensor
 import IPython
 import copy
 e = IPython.embed
-from aloha_scripts.utils import *
+from ..aloha_scripts.utils import *
 
 def flatten_list(l):
     return [item for sublist in l for item in sublist]

@@ -7,7 +7,9 @@ import json
 import sys
 import jax
 import numpy as np
+from typing import List
 from openpi.models import model as _model
+from openpi.models import gemma as _gemma
 from openpi.policies import aloha_policy
 from openpi.policies import policy_config as _policy_config
 from openpi.shared import download
@@ -40,6 +42,7 @@ class PI0:
         self.img_size = (224, 224)
         self.observation_window = None
         self.pi0_step = pi0_step
+        self._attn_enabled = False
 
     # set img_size
     def set_img_size(self, img_size):
@@ -80,3 +83,13 @@ class PI0:
         self.instruction = None
         self.observation_window = None
         print("successfully unset obs and language intruction")
+
+    # ============== Attention helpers ==============
+    def enable_attention(self, enabled: bool) -> None:
+        """Enable or disable attention recording."""
+        self._attn_enabled = bool(enabled)
+        _gemma.enable_attn_recording(self._attn_enabled)
+
+    def get_attention(self, clear: bool = True) -> List[np.ndarray]:
+        """Fetch recorded attention arrays; clears internal buffer."""
+        return _gemma.get_attn_records(clear=clear)

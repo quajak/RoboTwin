@@ -27,7 +27,7 @@ import glob
 
 from ._GLOBAL_CONFIGS import *
 
-from typing import Optional, Literal
+from typing import Optional, Literal, Callable, Dict
 
 current_file_path = os.path.abspath(__file__)
 parent_directory = os.path.dirname(current_file_path)
@@ -76,6 +76,9 @@ class Base_Task(gym.Env):
         self.random_background = random_setting.get("random_background", False)
         self.cluttered_table = random_setting.get("cluttered_table", False)
         self.clean_background_rate = random_setting.get("clean_background_rate", 1)
+        self.max_cluttered_obj_num = random_setting.get("max_cluttered_obj_num", 10)
+        self.min_cluttered_obj_num = random_setting.get("min_cluttered_obj_num", 10)
+        self.valid_object_names = random_setting.get("object_names", [])
         self.random_head_camera_dis = random_setting.get("random_head_camera_dis", 0)
         self.random_table_height = random_setting.get("random_table_height", 0)
         self.random_light = random_setting.get("random_light", False)
@@ -98,6 +101,9 @@ class Base_Task(gym.Env):
         self.now_obs = {}
         self.take_action_cnt = 0
         self.eval_video_path = kwags.get("eval_video_save_dir", None)
+        self.eval_video_ffmpeg = None  # legacy single-writer
+        self.eval_video_writers: Dict[str, subprocess.Popen] = {}
+        self._frame_modifier: Optional[Callable[[dict], dict]] = None
 
         self.save_freq = kwags.get("save_freq")
         self.world_pcd = None
@@ -314,8 +320,9 @@ class Base_Task(gym.Env):
             texture_id=self.table_texture,
         )
 
-    def get_cluttered_table(self, cluttered_numbers=10, xlim=[-0.59, 0.59], ylim=[-0.34, 0.34], zlim=[0.741]):
+    def get_cluttered_table(self, xlim=[-0.59, 0.59], ylim=[-0.34, 0.34], zlim=[0.741]):
         self.record_cluttered_objects = []  # record cluttered objects
+        cluttered_numbers = np.random.randint(self.min_cluttered_obj_num, self.max_cluttered_obj_num + 1)
 
         xlim[0] += self.table_xy_bias[0]
         xlim[1] += self.table_xy_bias[0]
@@ -334,6 +341,9 @@ class Base_Task(gym.Env):
                 continue
             task_objects_list.append(actor_name)
         self.obj_names, self.cluttered_item_info = get_available_cluttered_objects(task_objects_list)
+        if len(self.valid_object_names) > 0:
+            self.obj_names = self.valid_object_names
+            self.cluttered_item_info = {obj_name: self.cluttered_item_info[obj_name] for obj_name in self.obj_names}
 
         success_count = 0
         max_try = 50
@@ -573,7 +583,16 @@ class Base_Task(gym.Env):
         self.right_joint_path = args.get("right_joint_path", [])
 
     def _set_eval_video_ffmpeg(self, ffmpeg):
+        """Set single ffmpeg writer (legacy)."""
         self.eval_video_ffmpeg = ffmpeg
+
+    def _set_eval_video_writers(self, writers: Dict[str, subprocess.Popen]):
+        """Set per-camera ffmpeg writers."""
+        self.eval_video_writers = writers or {}
+
+    def set_frame_modifier(self, modifier: Optional[Callable[[dict], dict]]):
+        """Register a frame modifier: frames_by_name -> frames_by_name."""
+        self._frame_modifier = modifier
 
     def close_env(self, clear_cache=False):
         if clear_cache:
@@ -587,6 +606,16 @@ class Base_Task(gym.Env):
             self.eval_video_ffmpeg.stdin.close()
             self.eval_video_ffmpeg.wait()
             del self.eval_video_ffmpeg
+
+    def _del_eval_video_writers(self):
+        """Close all per-camera ffmpeg writers."""
+        for proc in self.eval_video_writers.values():
+            try:
+                proc.stdin.close()
+                proc.wait()
+            except Exception:
+                pass
+        self.eval_video_writers = {}
 
     def delay(self, delay_time, save_freq=None):
         render_freq = self.render_freq
@@ -1455,13 +1484,59 @@ class Base_Task(gym.Env):
 
         return True  # TODO: maybe need try error
 
+    def render_video_frames(self, use_frame_modifier=True):
+        # Collect frames by camera name
+        frames_by_name = {}
+        try:
+            cam_obs = self.now_obs.get("observation", {})
+            for cam_name, cam_dict in cam_obs.items():
+                if isinstance(cam_dict, dict) and ("rgb" in cam_dict):
+                    frames_by_name[cam_name] = cam_dict["rgb"]
+        except Exception:
+            frames_by_name = {}
+
+        # Apply frame modifier if provided
+        if use_frame_modifier and self._frame_modifier is not None and frames_by_name:
+            try:
+                frames_by_name = self._frame_modifier(frames_by_name) or frames_by_name
+            except Exception as e:
+                print(e)
+
+        # Write frames to per-camera writers if available, else fallback to single writer
+        if self.eval_video_writers:
+            for cam_name, writer in self.eval_video_writers.items():
+                frame = frames_by_name.get(cam_name)
+                if frame is None:
+                    continue
+                if frame.dtype != np.uint8:
+                    frame = (frame * 255).clip(0, 255).astype(np.uint8)
+                try:
+                    writer.stdin.write(frame.tobytes())
+                except Exception:
+                    pass
+        elif self.eval_video_ffmpeg is not None:
+            frame = frames_by_name.get("head_camera")
+            if frame is None:
+                frame = self.now_obs["observation"]["head_camera"]["rgb"]
+            if frame.dtype != np.uint8:
+                frame = (frame * 255).clip(0, 255).astype(np.uint8)
+            try:
+                self.eval_video_ffmpeg.stdin.write(frame.tobytes())
+            except Exception:
+                pass
+        
+
     def take_action(self, action, action_type='qpos'):  # action_type: qpos or ee
         if self.take_action_cnt == self.step_lim or self.eval_success:
             return
 
         eval_video_freq = 1  # fixed
         if (self.eval_video_path is not None and self.take_action_cnt % eval_video_freq == 0):
-            self.eval_video_ffmpeg.stdin.write(self.now_obs["observation"]["head_camera"]["rgb"].tobytes())
+            if self.take_action_cnt % 25 == 0:
+                for i in range(18):
+                    self.render_video_frames()
+            else:
+                self.render_video_frames(use_frame_modifier=False)
 
         self.take_action_cnt += 1
         print(f"step: \033[92m{self.take_action_cnt} / {self.step_lim}\033[0m", end="\r")

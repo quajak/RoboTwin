@@ -26,3 +26,12 @@ envs/curobo/*
 
 /*.json*
 /*.txt
+*.hdf5
+
+policy/TinyVLA/model_param
+policy/TinyVLA/unet_diffusion_policy_results
+policy/TinyVLA/TinyVLA-v2/unet_diffusion_policy_results
+
+*.pyc
+
+policy/TinyVLA/policy_heads/policy_heads.egg-info

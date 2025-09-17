@@ -158,6 +158,7 @@ def main(usr_args):
     seed = usr_args["seed"]
 
     st_seed = 100000 * (1 + seed)
+    # st_seed = seed
     suc_nums = []
     test_num = 100
     topk = 1
@@ -240,7 +241,7 @@ def eval_policy(task_name,
                 TASK_ENV.close_env()
                 now_seed += 1
                 args["render_freq"] = render_freq
-                print("error occurs !")
+                print(f"error occurs ! {e}")
                 continue
 
         if (not expert_check) or (TASK_ENV.plan_success and TASK_ENV.check_success()):
@@ -260,33 +261,69 @@ def eval_policy(task_name,
         TASK_ENV.set_instruction(instruction=instruction)  # set language instruction
 
         if TASK_ENV.eval_video_path is not None:
-            ffmpeg = subprocess.Popen(
-                [
-                    "ffmpeg",
-                    "-y",
-                    "-loglevel",
-                    "error",
-                    "-f",
-                    "rawvideo",
-                    "-pixel_format",
-                    "rgb24",
-                    "-video_size",
-                    video_size,
-                    "-framerate",
-                    "10",
-                    "-i",
-                    "-",
-                    "-pix_fmt",
-                    "yuv420p",
-                    "-vcodec",
-                    "libx264",
-                    "-crf",
-                    "23",
-                    f"{TASK_ENV.eval_video_path}/episode{TASK_ENV.test_num}.mp4",
-                ],
-                stdin=subprocess.PIPE,
-            )
-            TASK_ENV._set_eval_video_ffmpeg(ffmpeg)
+            # Prepare per-camera writers for head_camera, left_camera, right_camera
+            writers = {}
+            cams = [
+                ("head_camera", args["camera"]["head_camera_type"]),
+                ("left_camera", args["camera"]["wrist_camera_type"]),
+                ("right_camera", args["camera"]["wrist_camera_type"]),
+                ("attention_mask", "ATTN_IMG"),
+            ]
+            cam_sizes = {}
+            for cam_name, cam_type in cams:
+                cfg = get_camera_config(cam_type)
+                cam_sizes[cam_name] = f"{cfg['w']}x{cfg['h']}"
+            for cam_name in ["head_camera", "left_camera", "right_camera", "attention_mask"]:
+                size = cam_sizes[cam_name]
+                out_path = f"{TASK_ENV.eval_video_path}/episode{TASK_ENV.test_num}_{cam_name}.mp4"
+                proc = subprocess.Popen(
+                    [
+                        "ffmpeg",
+                        "-y",
+                        "-loglevel",
+                        "error",
+                        "-f",
+                        "rawvideo",
+                        "-pixel_format",
+                        "rgb24",
+                        "-video_size",
+                        size,
+                        "-framerate",
+                        "1",
+                        "-i",
+                        "-",
+                        "-pix_fmt",
+                        "yuv420p",
+                        "-vcodec",
+                        "libx264",
+                        "-crf",
+                        "23",
+                        out_path,
+                    ],
+                    stdin=subprocess.PIPE,
+                )
+                writers[cam_name] = proc
+            TASK_ENV._set_eval_video_writers(writers)
+
+            # Register frame modifier to overlay attention per frame using dynamic lookup
+            try:
+                overlay_attention_on_frames = eval_function_decorator(policy_name, "overlay_attention_on_frames")
+            except Exception:
+                overlay_attention_on_frames = None
+
+            if overlay_attention_on_frames is not None:
+                def _modifier(frames_by_name):
+                    try:
+                        attn = model.get_attention(False)
+                    except Exception as e:
+                        print(e)
+                        attn = None
+                    if not attn:
+                        return frames_by_name
+                    return overlay_attention_on_frames(attn, frames_by_name)
+                TASK_ENV.set_frame_modifier(_modifier)
+            else:
+                TASK_ENV.set_frame_modifier(None)
 
         succ = False
         reset_func(model)
@@ -298,13 +335,14 @@ def eval_policy(task_name,
                 break
         # task_total_reward += TASK_ENV.episode_score
         if TASK_ENV.eval_video_path is not None:
-            TASK_ENV._del_eval_video_ffmpeg()
+            TASK_ENV._del_eval_video_writers()
+            TASK_ENV.set_frame_modifier(None)
 
         if succ:
             TASK_ENV.suc += 1
-            print("\033[92mSuccess!\033[0m")
+            print("\n\033[92mSuccess!\033[0m")
         else:
-            print("\033[91mFail!\033[0m")
+            print("\n\033[91mFail!\033[0m")
 
         now_id += 1
         TASK_ENV.close_env(clear_cache=((succ_seed + 1) % clear_cache_freq == 0))

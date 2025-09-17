@@ -14,6 +14,7 @@ import pdb
 task_prompt = {
     "place_object_scale": "Use one arm to grab the object and put it on the scale.",
 "place_phone_stand": "Place phone onto stand using multi-angle desk images to determine positions and plan actions.",
+"place_empty_cup": "Use an arm to place the empty cup on the coaster."
 }
 
 def load_hdf5(dataset_path):
@@ -128,5 +129,5 @@ if __name__ == "__main__":
 
     data_path_name = task_name + "/" + setting + "/data"
     begin = 0
-    begin = data_transform(os.path.join("../../../data/", data_path_name), expert_data_num,
+    begin = data_transform(os.path.join("../../data/", data_path_name), expert_data_num,
                            f"data/sim-{task_name}/{setting}-{expert_data_num}",task_name)

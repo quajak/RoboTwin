@@ -1,6 +1,6 @@
 # Basic experiment configuration (keep unchanged)
 policy_name: TinyVLA
-task_name: task_you_test
+task_name: place_empty_cup
 task_config: null
 ckpt_setting: null
 seed: null
@@ -8,8 +8,8 @@ instruction_type: unseen
 policy_conda_env: null
 
 # Add Parameters You Need
-state_path: /home/task/dataset_stats.pkl 
-model_base: /home/model_param/InternVL3-1B/ # 基座模型路径
-model_path: /home/model/task/4000 # 模型权重路径
+state_path: /home/gerigkja/RoboTwin/policy/TinyVLA/unet_diffusion_policy_results/mixed_four-48BS-2e-5LR-4noise_samples/dataset_stats.pkl
+model_base: /home/gerigkja/RoboTwin/model_param/InternVL3-1B/ # 基座模型路径
+model_path: /home/gerigkja/RoboTwin/policy/TinyVLA/unet_diffusion_policy_results/mixed_four-48BS-2e-5LR-4noise_samples/checkpoint-10000 # 模型权重路径
 enable_lore: False
 setting: NULL
