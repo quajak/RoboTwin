@@ -1521,6 +1521,7 @@ class Base_Task(gym.Env):
             try:
                 frames_by_name = self._frame_modifier(frames_by_name) or frames_by_name
             except Exception as e:
+                breakpoint()
                 print(e)
 
         # Write frames to per-camera writers if available, else fallback to single writer
@@ -1529,11 +1530,18 @@ class Base_Task(gym.Env):
                 frame = frames_by_name.get(cam_name)
                 if frame is None:
                     continue
-                if frame.dtype != np.uint8:
-                    frame = (frame * 255).clip(0, 255).astype(np.uint8)
                 try:
-                    writer.stdin.write(frame.tobytes())
-                except Exception:
+                    if cam_name == 'attention_mask':
+                        for f in frame:
+                            writer.stdin.write(f.tobytes())
+                        del self.now_obs['observation']['attention_mask']
+                    else:
+                        if frame.dtype != np.uint8:
+                            frame = (frame * 255).clip(0, 255).astype(np.uint8)
+                        writer.stdin.write(frame.tobytes())
+                except Exception as e:
+                    breakpoint()
+                    print(e)
                     pass
         elif self.eval_video_ffmpeg is not None:
             frame = frames_by_name.get("head_camera")
@@ -1554,7 +1562,7 @@ class Base_Task(gym.Env):
         eval_video_freq = 1  # fixed
         if (self.eval_video_path is not None and self.take_action_cnt % eval_video_freq == 0):
             if self.take_action_cnt % 25 == 0:
-                for i in range(18):
+                for i in range(198):
                     self.render_video_frames()
             else:
                 self.render_video_frames(use_frame_modifier=False)
@@ -1753,7 +1761,9 @@ class Base_Task(gym.Env):
                 self.eval_success = True
                 self.get_obs() # update obs
                 if (self.eval_video_path is not None):
-                    self.eval_video_ffmpeg.stdin.write(self.now_obs["observation"]["head_camera"]["rgb"].tobytes())
+                    #TODO: This needs to be updated to the new setup
+                    #self.eval_video_ffmpeg.stdin.write(self.now_obs["observation"]["head_camera"]["rgb"].tobytes())
+                    pass
                 return
 
         self._update_render()

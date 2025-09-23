@@ -54,10 +54,11 @@ def eval(TASK_ENV, model: PI0, observation: dict) -> None:
         diff = action - last_action
         # print(np.abs(diff).max(), np.linalg.norm(diff))
         last_action = action
+        TASK_ENV.now_obs['observation']['attention_mask'] = {'rgb': generate_attention_visualization(model)}
         TASK_ENV.take_action(action)
+        model.get_attention(True)
         observation = TASK_ENV.get_obs()
         input_rgb_arr, input_state = encode_obs(observation)
-        observation['observation']['attention_mask'] = generate_attention_visualization(model)
         model.update_observation_window(input_rgb_arr, input_state)
 
 
@@ -67,14 +68,16 @@ def reset_model(model):
 
 def generate_attention_visualization(model: PI0):
     attn_values= model.get_attention(False)
+    if len(attn_values) == 0:
+        return []
     # turn the attn_values to a image, each row is for one layer
-    breakpoint()
-    attn_values = attn_values.mean(axis=(0, 1, 4))
-    img = (attn_values * 255).astype(np.uint8)
-    img = np.repeat(img[None, ...], 3, axis=0)
-    img = np.repeat(img[None, ...], 16, axis=1)
-    img = np.pad(img, ((0, 0), (0, 1000 - img.shape[1]), (0, 0)))
-    return img
+    first_set = attn_values[:18] # (1, 1, 8, 816, 816)
+    first_set = [a[0,0] for a in first_set]
+    imgs = np.concatenate(first_set, axis=0)
+    imgs = (imgs * 255).astype(np.uint8)
+    imgs = np.repeat(np.expand_dims(imgs, -1), 3, -1)
+    #breakpoint()
+    return list(imgs)
 
 def to_overlay_rgb(weight_map: np.ndarray, target_hw: tuple[int, int], vmin=None, vmax=None) -> np.ndarray:
     w = weight_map
@@ -107,9 +110,9 @@ def overlay_attention_on_frames(attn_records: List[np.ndarray], frames_by_name: 
     if not attn_records or not isinstance(frames_by_name, dict):
         return frames_by_name
 
-    arr = attn_records[-(18 - COUNTER)]
+    arr = attn_records[-(198 - COUNTER)]
     COUNTER += 1
-    COUNTER %= 18
+    COUNTER %= 198
     if arr.ndim == 4:
         arr = arr[:, None, None, ...]
     if arr.ndim != 5:

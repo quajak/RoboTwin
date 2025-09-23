@@ -66,6 +66,7 @@ def get_attn_records(clear: bool = True) -> list[np.ndarray]:
 
 def _host_store_attn(arr) -> None:
     # Called on host via jax.debug.callback; arr is a numpy array.
+    #breakpoint()
     ATTN_RECORDS.append(np.array(arr))
 
 @dataclasses.dataclass
@@ -421,6 +422,7 @@ class Module(nn.Module):
         embedded = jax.tree.map(lambda e: e.astype(self.embed_dtype), embedded)
         mask = jnp.asarray(mask)[:, None, :, :]
 
+        #breakpoint()
         embedded, kv_cache = self.layers(embedded, kv_cache, positions, mask, deterministic)
 
         assert all(e.dtype == jnp.dtype(self.embed_dtype) for e in embedded if e is not None)
