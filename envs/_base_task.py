@@ -63,6 +63,7 @@ class Base_Task(gym.Env):
         self.task_name = kwags.get("task_name")
         self.save_dir = kwags.get("save_path", "data")
         self.ep_num = kwags.get("now_ep_num", 0)
+        self.seed = kwags.get("seed", 0)
         self.render_freq = kwags.get("render_freq", 10)
         self.data_type = kwags.get("data_type", None)
         self.save_data = kwags.get("save_data", False)
@@ -1521,7 +1522,6 @@ class Base_Task(gym.Env):
             try:
                 frames_by_name = self._frame_modifier(frames_by_name) or frames_by_name
             except Exception as e:
-                breakpoint()
                 print(e)
 
         # Write frames to per-camera writers if available, else fallback to single writer
@@ -1561,11 +1561,12 @@ class Base_Task(gym.Env):
 
         eval_video_freq = 1  # fixed
         if (self.eval_video_path is not None and self.take_action_cnt % eval_video_freq == 0):
-            if self.take_action_cnt % 25 == 0:
-                for i in range(198):
-                    self.render_video_frames()
-            else:
-                self.render_video_frames(use_frame_modifier=False)
+            # if self.take_action_cnt % 25 == 0:
+            #     for i in range(198):
+            #         self.render_video_frames()
+            # else:
+            #     self.render_video_frames(use_frame_modifier=False)
+            self.render_video_frames(use_frame_modifier=False)
 
         self.take_action_cnt += 1
         print(f"step: \033[92m{self.take_action_cnt} / {self.step_lim}\033[0m", end="\r")

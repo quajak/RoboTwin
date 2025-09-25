@@ -242,6 +242,7 @@ def eval_policy(task_name,
                 now_seed += 1
                 args["render_freq"] = render_freq
                 print(f"error occurs ! {e}")
+                print(traceback.format_exc())
                 continue
 
         if (not expert_check) or (TASK_ENV.plan_success and TASK_ENV.check_success()):
