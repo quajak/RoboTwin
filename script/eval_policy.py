@@ -213,6 +213,7 @@ def eval_policy(task_name,
     now_seed = st_seed
     task_total_reward = 0
     clear_cache_freq = args["clear_cache_freq"]
+    print(f"clear_cache_freq: {clear_cache_freq}")
 
     args["eval_mode"] = True
 

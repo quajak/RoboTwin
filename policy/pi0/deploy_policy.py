@@ -74,6 +74,7 @@ def reset_model(model):
 
 
 def generate_attention_visualization(model: PI0, TASK_ENV):
+    # return []
     attn_values= model.get_attention(False)
     if len(attn_values) == 0 or TASK_ENV.eval_video_path is None:
         return []
@@ -81,9 +82,18 @@ def generate_attention_visualization(model: PI0, TASK_ENV):
     first_set = attn_values[:18] # (1, 1, 8, 816, 816)
     first_set = [a[0,0] for a in first_set]
     imgs = np.concatenate(first_set, axis=0)
-    path = f"/home/gerigkja/RoboTwin/eval_result/random/3_rand_{TASK_ENV.ep_num}_{step}_{TASK_ENV.seed}.npy"
+    base_name = '0_clean_300m'
+    instruction_path = f"/home/gerigkja/RoboTwin/eval_result/random/instruction_{base_name}_{TASK_ENV.ep_num}_{TASK_ENV.seed}.txt"
+    if not os.path.exists(instruction_path):
+        with open(instruction_path, "w") as f:
+            f.write(TASK_ENV.get_instruction())
+    path = f"/home/gerigkja/RoboTwin/eval_result/random/{base_name}_{TASK_ENV.ep_num}_{step}_{TASK_ENV.seed}.npy"
     if not os.path.exists(path):
         np.save(path, imgs)
+    diffusion_path = f"/home/gerigkja/RoboTwin/eval_result/random/diffusion_{base_name}_{TASK_ENV.ep_num}_{step}_{TASK_ENV.seed}.npy"
+    if not os.path.exists(diffusion_path):
+        np.save(diffusion_path, np.concatenate(attn_values[18:])[:,0].reshape(10, 18, 8, 51, 867))
+    return []
     imgs[:, :, :768] = 1
     imgs = (imgs * 255).astype(np.uint8)
     imgs = np.repeat(np.expand_dims(imgs, -1), 3, -1)
