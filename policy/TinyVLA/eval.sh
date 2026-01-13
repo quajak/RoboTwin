@@ -1,7 +1,7 @@
 #!/bin/bash
 
 policy_name=TinyVLA
-task_name=task_you_test
+task_name=place_empty_cup
 task_config=demo_clean
 ckpt_setting=0
 expert_data_num=200

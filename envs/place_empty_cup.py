@@ -47,8 +47,8 @@ class place_empty_cup(Base_Task):
             is_static=True
         )
 
-        self.add_prohibit_area(self.cup, padding=0.05)
-        self.add_prohibit_area(self.coaster, padding=0.05)
+        self.add_prohibit_area(self.cup, padding=0.01)  # used to be 0.05
+        self.add_prohibit_area(self.coaster, padding=0.01)
         self.delay(2)
         cup_pose = self.cup.get_pose().p
 

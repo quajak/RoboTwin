@@ -1,0 +1,210 @@
+================================================================================
+MODEL WEIGHT DIFFERENCE ANALYSIS REPORT
+================================================================================
+
+Checkpoint 1: /home/gerigkja/RoboTwin/policy/pi0/checkpoints/pi0_base_aloha_robotwin_lora/place_empty_cup_demo_lim_obj_rand/15000
+Checkpoint 2: /home/gerigkja/RoboTwin/policy/pi0/checkpoints/pi0_base_aloha_robotwin_lora/demo_clean_place_empty_cup/15000
+Analysis Date: 2025-10-14 16:10:28.562237
+
+OVERALL STATISTICS
+----------------------------------------
+Total parameters analyzed: 648
+L2 Norm - Mean: 0.273921, Std: 1.143365
+L2 Norm - Min: 0.000000, Max: 16.972580
+Cosine Similarity - Mean: 0.989163, Std: 0.036801
+Cosine Similarity - Min: 0.496164, Max: 1.003176
+Relative Difference - Mean: 0.045752, Std: 0.045014
+Relative Difference - Min: 0.000000, Max: 0.191941
+
+TOP 20 PARAMETERS WITH LARGEST DIFFERENCES
+--------------------------------------------------
+ 1. ('PaliGemma', 'img', 'Transformer', 'encoderblock', 'MlpBlock_0', 'Dense_0', 'kernel')
+    L2 Norm: 16.972580
+    Cosine Similarity: 0.998409
+    Relative Difference: 0.057897
+    Max Abs Diff: 0.018883
+
+ 2. ('PaliGemma', 'img', 'Transformer', 'encoderblock', 'MlpBlock_0', 'Dense_1', 'kernel')
+    L2 Norm: 15.993783
+    Cosine Similarity: 0.998467
+    Relative Difference: 0.056802
+    Max Abs Diff: 0.015975
+
+ 3. ('PaliGemma', 'img', 'Transformer', 'encoderblock', 'MultiHeadDotProductAttention_0', 'query', 'kernel')
+    L2 Norm: 9.566486
+    Cosine Similarity: 0.997921
+    Relative Difference: 0.065472
+    Max Abs Diff: 0.011817
+
+ 4. ('PaliGemma', 'img', 'Transformer', 'encoderblock', 'MultiHeadDotProductAttention_0', 'key', 'kernel')
+    L2 Norm: 9.453060
+    Cosine Similarity: 0.998050
+    Relative Difference: 0.063421
+    Max Abs Diff: 0.011297
+
+ 5. ('PaliGemma', 'img', 'Transformer', 'encoderblock', 'MultiHeadDotProductAttention_0', 'out', 'kernel')
+    L2 Norm: 7.997117
+    Cosine Similarity: 0.998302
+    Relative Difference: 0.059012
+    Max Abs Diff: 0.009664
+
+ 6. ('PaliGemma', 'img', 'Transformer', 'encoderblock', 'MultiHeadDotProductAttention_0', 'value', 'kernel')
+    L2 Norm: 7.554951
+    Cosine Similarity: 0.998604
+    Relative Difference: 0.053553
+    Max Abs Diff: 0.010000
+
+ 7. ('PaliGemma', 'img', 'head', 'kernel')
+    L2 Norm: 1.233637
+    Cosine Similarity: 0.998371
+    Relative Difference: 0.057213
+    Max Abs Diff: 0.005016
+
+ 8. ('PaliGemma', 'img', 'pos_embedding')
+    L2 Norm: 1.040006
+    Cosine Similarity: 0.999998
+    Relative Difference: 0.001924
+    Max Abs Diff: 0.011207
+
+ 9. ('PaliGemma', 'llm', 'layers', '3', 'mlp', 'gating_einsum_lora_b')
+    L2 Norm: 1.012122
+    Cosine Similarity: 0.990925
+    Relative Difference: 0.134724
+    Max Abs Diff: 0.009464
+
+10. ('PaliGemma', 'llm', 'layers', '2', 'mlp', 'gating_einsum_lora_b')
+    L2 Norm: 1.008895
+    Cosine Similarity: 0.991047
+    Relative Difference: 0.133819
+    Max Abs Diff: 0.008397
+
+11. ('PaliGemma', 'llm', 'layers', '0', 'mlp', 'gating_einsum_lora_b')
+    L2 Norm: 0.985209
+    Cosine Similarity: 0.991546
+    Relative Difference: 0.130038
+    Max Abs Diff: 0.010077
+
+12. ('PaliGemma', 'llm', 'layers', '1', 'mlp', 'gating_einsum_lora_b')
+    L2 Norm: 0.972293
+    Cosine Similarity: 0.991680
+    Relative Difference: 0.128998
+    Max Abs Diff: 0.009204
+
+13. ('PaliGemma', 'llm', 'layers', '4', 'mlp', 'gating_einsum_lora_b')
+    L2 Norm: 0.955536
+    Cosine Similarity: 0.991894
+    Relative Difference: 0.127333
+    Max Abs Diff: 0.007471
+
+14. ('PaliGemma', 'llm', 'layers', '16', 'mlp', 'gating_einsum_lora_b')
+    L2 Norm: 0.950554
+    Cosine Similarity: 0.992363
+    Relative Difference: 0.123593
+    Max Abs Diff: 0.012761
+
+15. ('PaliGemma', 'llm', 'layers', '14', 'mlp', 'gating_einsum_lora_b')
+    L2 Norm: 0.946176
+    Cosine Similarity: 0.992281
+    Relative Difference: 0.124255
+    Max Abs Diff: 0.011717
+
+16. ('PaliGemma', 'llm', 'layers', '16', 'attn', 'q_einsum', 'lora_a')
+    L2 Norm: 0.936586
+    Cosine Similarity: 0.985010
+    Relative Difference: 0.173149
+    Max Abs Diff: 0.010631
+
+17. ('PaliGemma', 'llm', 'layers', '15', 'mlp', 'gating_einsum_lora_b')
+    L2 Norm: 0.930044
+    Cosine Similarity: 0.992624
+    Relative Difference: 0.121470
+    Max Abs Diff: 0.011065
+
+18. ('PaliGemma', 'llm', 'layers', '5', 'mlp', 'gating_einsum_lora_b')
+    L2 Norm: 0.922197
+    Cosine Similarity: 0.992414
+    Relative Difference: 0.123188
+    Max Abs Diff: 0.009796
+
+19. ('PaliGemma', 'llm', 'layers', '13', 'mlp', 'gating_einsum_lora_b')
+    L2 Norm: 0.915138
+    Cosine Similarity: 0.992748
+    Relative Difference: 0.120441
+    Max Abs Diff: 0.008314
+
+20. ('PaliGemma', 'llm', 'layers', '12', 'mlp', 'gating_einsum_lora_b')
+    L2 Norm: 0.841137
+    Cosine Similarity: 0.993769
+    Relative Difference: 0.111641
+    Max Abs Diff: 0.007704
+
+GROUP-LEVEL ANALYSIS
+------------------------------
+
+ATTENTION GROUP:
+  Parameter count: 360
+  Average L2 norm: 0.153693
+  Max L2 norm: 0.936586
+  Average cosine similarity: 0.997277
+  Min cosine similarity: 0.981584
+  Average relative difference: 0.048034
+  Max relative difference: 0.191941
+
+MLP GROUP:
+  Parameter count: 220
+  Average L2 norm: 0.228358
+  Max L2 norm: 1.012122
+  Average cosine similarity: 0.974862
+  Min cosine similarity: 0.814392
+  Average relative difference: 0.053731
+  Max relative difference: 0.134724
+
+EMBEDDING GROUP:
+  Parameter count: 4
+  Average L2 norm: 0.376733
+  Max L2 norm: 1.040006
+  Average cosine similarity: 0.873953
+  Min cosine similarity: 0.496164
+  Average relative difference: 0.007680
+  Max relative difference: 0.026338
+
+PROJECTION GROUP:
+  Parameter count: 6
+  Average L2 norm: 0.036948
+  Max L2 norm: 0.116076
+  Average cosine similarity: 0.999920
+  Min cosine similarity: 0.999761
+  Average relative difference: 0.011331
+  Max relative difference: 0.026621
+
+ENCODERBLOCK GROUP:
+  Parameter count: 16
+  Average L2 norm: 4.307707
+  Max L2 norm: 16.972580
+  Average cosine similarity: 0.999359
+  Min cosine similarity: 0.997921
+  Average relative difference: 0.022893
+  Max relative difference: 0.065472
+
+OTHER GROUP:
+  Parameter count: 42
+  Average L2 norm: 0.030486
+  Max L2 norm: 1.233637
+  Average cosine similarity: 1.000067
+  Min cosine similarity: 0.996563
+  Average relative difference: 0.001648
+  Max relative difference: 0.057213
+
+
+SUMMARY INSIGHTS
+--------------------
+• Group with highest average L2 norm: encoderblock (4.307707)
+• Parameters with lowest cosine similarity:
+  - ('PaliGemma', 'llm', 'embedder', 'input_embedding'): 0.496164
+  - ('PaliGemma', 'llm', 'layers', '6', 'mlp', 'gating_einsum'): 0.814392
+  - ('PaliGemma', 'llm', 'layers', '7', 'mlp', 'gating_einsum'): 0.816834
+  - ('PaliGemma', 'llm', 'layers', '2', 'mlp', 'gating_einsum'): 0.820116
+  - ('PaliGemma', 'llm', 'layers', '11', 'mlp', 'gating_einsum'): 0.821771
+
+• Total parameters with cosine similarity < 0.9: 19
+• Total parameters with relative difference > 0.1: 94

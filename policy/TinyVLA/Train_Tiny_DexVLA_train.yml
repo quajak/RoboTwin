@@ -23,6 +23,7 @@ dependencies:
   - xz=5.4.6
   - zlib=1.2.13
   - pip:
+      - packaging==24.0
       - absl-py==2.1.0
       - accelerate==1.2.0
       - addict==2.4.0
@@ -133,7 +134,6 @@ dependencies:
       - opencv-python-headless==4.11.0.86
       - orjson==3.10.18
       - oss2==2.18.5
-      - packaging==24.0
       - pandas==2.2.2
       - parso==0.8.4
       - peft==0.15.2

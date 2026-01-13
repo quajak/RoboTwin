@@ -5,7 +5,7 @@ import logging
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, Qwen2Tokenizer
 import warnings
 import os
-from aloha_scripts.utils import *
+from ..aloha_scripts.utils import *
 
 
 def find_all_linear_names(model, rank0_print):

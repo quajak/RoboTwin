@@ -25,4 +25,5 @@ python script/eval_policy.py --config policy/$policy_name/deploy_policy.yml \
     --model_name ${model_name} \
     --ckpt_setting ${model_name} \
     --seed ${seed} \
-    --policy_name ${policy_name} 
+    --policy_name ${policy_name} \
+    --clear_cache_freq 0

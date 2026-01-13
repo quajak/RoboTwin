@@ -197,6 +197,8 @@ class Pi0(_model.BaseModel):
 
         # embed images
         for idx, name in enumerate(obs.images):
+            if name == "attention_mask":
+                continue
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
 
             # Apply token augmentation if enabled

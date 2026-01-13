@@ -32,6 +32,7 @@ import einops
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 import openpi.models.lora as lora
 import openpi.shared.array_typing as at
@@ -39,6 +40,34 @@ import openpi.training.sharding as sharding
 
 PALIGEMMA_VOCAB_SIZE = 257_152
 
+
+# Attention recording (host-side) helpers
+# These are intentionally simple globals to allow lightweight introspection during inference.
+ATTN_RECORD_ENABLED = False
+ATTN_RECORDS: list[np.ndarray] = []
+
+
+def enable_attn_recording(enabled: bool) -> None:
+    """Enable/disable attention recording."""
+    global ATTN_RECORD_ENABLED
+    ATTN_RECORD_ENABLED = enabled
+    if enabled:
+        ATTN_RECORDS.clear()
+
+
+def get_attn_records(clear: bool = True) -> list[np.ndarray]:
+    """Return recorded attention arrays (B,K,G,T,S), optionally clearing."""
+    global ATTN_RECORDS
+    recs = list(ATTN_RECORDS)
+    if clear:
+        ATTN_RECORDS = []
+    return recs
+
+
+def _host_store_attn(arr) -> None:
+    # Called on host via jax.debug.callback; arr is a numpy array.
+    #breakpoint()
+    ATTN_RECORDS.append(np.array(arr))
 
 @dataclasses.dataclass
 class Config:
@@ -223,6 +252,11 @@ class Attention(nn.Module):
 
         probs = jax.nn.softmax(masked_logits, axis=-1).astype(dtype)
 
+        # Host-side recording of attention probabilities (optional).
+        # Shape: (B, K, G, T, S). Stored as float32 numpy arrays.
+        if ATTN_RECORD_ENABLED:
+            jax.debug.callback(_host_store_attn, probs.astype(jnp.float32))
+
         encoded = jnp.einsum("BKGTS,BSKH->BTKGH", probs, v)
         encoded = einops.rearrange(encoded, "B T K G H -> B T (K G) H")
 
@@ -388,6 +422,7 @@ class Module(nn.Module):
         embedded = jax.tree.map(lambda e: e.astype(self.embed_dtype), embedded)
         mask = jnp.asarray(mask)[:, None, :, :]
 
+        #breakpoint()
         embedded, kv_cache = self.layers(embedded, kv_cache, positions, mask, deterministic)
 
         assert all(e.dtype == jnp.dtype(self.embed_dtype) for e in embedded if e is not None)

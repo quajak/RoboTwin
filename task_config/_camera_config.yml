@@ -17,3 +17,9 @@ Large_D435:
   fovy: 37
   w: 640
   h: 480
+
+
+ATTN_IMG:
+  fovy: 45
+  w: 816
+  h: 816

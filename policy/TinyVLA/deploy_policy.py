@@ -10,12 +10,12 @@ import numpy as np
 from torchvision import transforms
 from transformers import AutoConfig, AutoProcessor, AutoTokenizer
 
-from vla import *
-from policy_heads import *
-from aloha_scripts.constants import *
-from data_utils.dataset import set_seed
-from data_utils.robot_data_processor import InternVL3Process
-from vla.model_load_utils import load_model_for_eval
+from .vla import *
+from .policy_heads import *
+from .aloha_scripts.constants import *
+from .data_utils.dataset import set_seed
+from .data_utils.robot_data_processor import InternVL3Process
+from .vla.model_load_utils import load_model_for_eval
 
 def preprocess_img(images: torch.Tensor):
     assert images.ndim == 4 and images.shape[1] == 3

@@ -1,11 +1,10 @@
 #!/bin/bash
 LLM=InternVL3
 ACTION_HEAD=unet_diffusion_policy
-TASK=dual_shoes_place
+TASK=place_empty_cup
 
-ROOT=/data/private/liuza/robotiwin/policy/TInyVLA/TinyVLA-v2
-mnop=/data/private/liuza/robotiwin/policy/TInyVLA/TinyVLA-v2/model_param/InternVL3-1B/
-#mnop=/data/private/liuza/robotiwin/policy/TInyVLA/TinyVLA-v2/vla/models/internvl
+ROOT=/home/gerigkja/RoboTwin/policy/TinyVLA/
+mnop=/home/gerigkja/RoboTwin/policy/TinyVLA/model_param/InternVL3-1B/
 BS=64
 LR=2e-5
 noise_samples=8
@@ -24,11 +23,11 @@ cp -r ./data_utils $OUTPUT/src/
 cp -r ./vla $OUTPUT/src/
 cp -r ./policy_heads $OUTPUT/src/
 
-deepspeed --master_port 29604 --num_gpus=8 --num_nodes=1 ./train_vla.py \
+deepspeed --master_port 29604 --num_gpus=1 --num_nodes=1 ./train_vla.py \
   --deepspeed scripts/zero2.json \
   --action_dim 14 \
   --state_dim 14 \
-  --flash_attn True \
+  --flash_attn False \
   --chunk_size 16 \
   --noise_samples ${noise_samples} \
   --policy_head_type $ACTION_HEAD \
