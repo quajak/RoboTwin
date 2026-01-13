@@ -501,6 +501,102 @@ _CONFIGS = [
         num_train_steps=30000,
         fsdp_devices=1,  # refer line 359
     ),
+    ###
+    ### Configs with token augmentation enabled
+    ###
+    # pi0_base with token augmentation (lora)
+    TrainConfig(
+        name="pi0_base_aloha_robotwin_lora_augmented",
+        model=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            token_augmenter=pi0.TokenAugmenterConfig(
+                checkpoint_path="path/to/dit_checkpoint.pt",  # Update with actual path
+                augment_cameras=["cam_high"],  # Cameras to augment
+                augment_probability=0.5,
+                num_steps=32,
+                token_scale=128.0,
+                input_size=256,
+                in_channels=1152,
+                hidden_size=768,
+                depth=6,
+                num_heads=12,
+                mlp_ratio=4.0,
+                num_classes=10,
+            ),
+        ),
+        data=LeRobotAlohaDataConfig(
+            repo_id="test",  # your datasets repo_id
+            adapt_to_pi=False,
+            repack_transforms=_transforms.Group(inputs=[
+                _transforms.RepackTransform({
+                    "images": {
+                        "cam_high": "observation.images.cam_high",
+                        "cam_left_wrist": "observation.images.cam_left_wrist",
+                        "cam_right_wrist": "observation.images.cam_right_wrist",
+                    },
+                    "state": "observation.state",
+                    "actions": "action",
+                    "prompt": "prompt",
+                })
+            ]),
+            base_config=DataConfig(
+                local_files_only=True,
+                prompt_from_task=True,
+            ),
+        ),
+        freeze_filter=pi0.Pi0Config(paligemma_variant="gemma_2b_lora",
+                                    action_expert_variant="gemma_300m_lora").get_freeze_filter(),
+        batch_size=32,
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=30000,
+        fsdp_devices=1,
+    ),
+    # pi0_base with token augmentation (full finetuning)
+    TrainConfig(
+        name="pi0_base_aloha_robotwin_full_augmented",
+        model=pi0.Pi0Config(
+            token_augmenter=pi0.TokenAugmenterConfig(
+                checkpoint_path="path/to/dit_checkpoint.pt",  # Update with actual path
+                augment_cameras=["cam_high", "cam_left_wrist"],  # Multiple cameras
+                augment_probability=0.5,
+                num_steps=32,
+                token_scale=128.0,
+                input_size=256,
+                in_channels=1152,
+                hidden_size=768,
+                depth=6,
+                num_heads=12,
+                mlp_ratio=4.0,
+                num_classes=10,
+            ),
+        ),
+        data=LeRobotAlohaDataConfig(
+            repo_id="your_repo_id",
+            adapt_to_pi=False,
+            repack_transforms=_transforms.Group(inputs=[
+                _transforms.RepackTransform({
+                    "images": {
+                        "cam_high": "observation.images.cam_high",
+                        "cam_left_wrist": "observation.images.cam_left_wrist",
+                        "cam_right_wrist": "observation.images.cam_right_wrist",
+                    },
+                    "state": "observation.state",
+                    "actions": "action",
+                    "prompt": "prompt",
+                })
+            ]),
+            base_config=DataConfig(
+                local_files_only=True,
+                prompt_from_task=True,
+            ),
+        ),
+        freeze_filter=pi0.Pi0Config().get_freeze_filter(),
+        batch_size=32,
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=30000,
+        fsdp_devices=4,
+    ),
 ]
 
 if len({config.name for config in _CONFIGS}) != len(_CONFIGS):

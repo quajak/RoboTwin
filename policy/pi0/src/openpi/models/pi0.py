@@ -1,5 +1,6 @@
 import dataclasses
 import logging
+from typing import Any
 
 import einops
 import flax.nnx as nnx
@@ -11,6 +12,7 @@ from typing_extensions import override
 from openpi.models import model as _model
 import openpi.models.gemma as _gemma
 import openpi.models.siglip as _siglip
+from openpi.models.token_augmenter import TokenAugmenterConfig
 from openpi.shared import array_typing as at
 import openpi.shared.nnx_utils as nnx_utils
 
@@ -73,6 +75,9 @@ class Pi0Config(_model.BaseModelConfig):
     action_dim: int = 32
     action_horizon: int = 50
     max_token_len: int = 48
+
+    # Token augmentation config (optional)
+    token_augmenter: TokenAugmenterConfig | None = None
 
     @property
     @override
@@ -161,16 +166,42 @@ class Pi0(_model.BaseModel):
         self.action_time_mlp_out = nnx.Linear(action_expert_config.width, action_expert_config.width, rngs=rngs)
         self.action_out_proj = nnx.Linear(action_expert_config.width, config.action_dim, rngs=rngs)
 
+        # Initialize token augmenter if configured
+        self._token_augmenter_config = config.token_augmenter
+        self._token_augmenter = None
+        self._token_augmenter_params = None
+        if config.token_augmenter is not None:
+            self._init_token_augmenter(config.token_augmenter)
+
+    def _init_token_augmenter(self, aug_config: TokenAugmenterConfig) -> None:
+        """Initialize the token augmenter from config."""
+        from openpi.models.token_augmenter import load_token_augmenter_from_config
+
+        self._token_augmenter, self._token_augmenter_params = load_token_augmenter_from_config(aug_config)
+        logger.info(f"Initialized token augmenter for cameras: {aug_config.augment_cameras}")
+
     @at.typecheck
     def embed_prefix(
-        self, obs: _model.Observation
+        self, obs: _model.Observation, *, augment_rng: at.KeyArrayLike | None = None
     ) -> tuple[at.Float[at.Array, "b s emb"], at.Bool[at.Array, "b s"], at.Bool[at.Array, " s"]]:
         input_mask = []
         ar_mask = []
         tokens = []
+
+        # Split rng for each camera if augmentation is enabled
+        if augment_rng is not None and self._token_augmenter is not None:
+            num_cameras = len(obs.images)
+            camera_rngs = jax.random.split(augment_rng, num_cameras)
+        else:
+            camera_rngs = None
+
         # embed images
-        for name in obs.images:
+        for idx, name in enumerate(obs.images):
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
+
+            # Apply token augmentation if enabled
+            if self._token_augmenter is not None and camera_rngs is not None:
+                image_tokens = self._maybe_augment_tokens(image_tokens, name, camera_rngs[idx])
 
             tokens.append(image_tokens)
             input_mask.append(einops.repeat(
@@ -192,6 +223,24 @@ class Pi0(_model.BaseModel):
         input_mask = jnp.concatenate(input_mask, axis=1)
         ar_mask = jnp.array(ar_mask)
         return tokens, input_mask, ar_mask
+
+    def _maybe_augment_tokens(
+        self, tokens: at.Float[at.Array, "b l c"], camera_name: str, rng: at.KeyArrayLike
+    ) -> at.Float[at.Array, "b l c"]:
+        """Apply token augmentation probabilistically based on camera name."""
+        aug_config = self._token_augmenter_config
+
+        # Check if this camera should be augmented
+        if camera_name not in aug_config.augment_cameras:
+            return tokens
+
+        # Probabilistic augmentation
+        should_augment = jax.random.uniform(rng) < aug_config.augment_probability
+
+        def augment_fn():
+            return self._token_augmenter.apply(self._token_augmenter_params, tokens, method="augment_tokens")
+
+        return jax.lax.cond(should_augment, augment_fn, lambda: tokens)
 
     @at.typecheck
     def embed_suffix(
@@ -232,7 +281,7 @@ class Pi0(_model.BaseModel):
                      actions: _model.Actions,
                      *,
                      train: bool = False) -> at.Float[at.Array, "*b ah"]:
-        preprocess_rng, noise_rng, time_rng = jax.random.split(rng, 3)
+        preprocess_rng, noise_rng, time_rng, augment_rng = jax.random.split(rng, 4)
         observation = _model.preprocess_observation(preprocess_rng, observation, train=train)
 
         batch_shape = actions.shape[:-2]
@@ -243,7 +292,9 @@ class Pi0(_model.BaseModel):
         u_t = noise - actions
 
         # one big forward pass of prefix + suffix at once
-        prefix_tokens, prefix_mask, prefix_ar_mask = self.embed_prefix(observation)
+        # Pass augment_rng only during training
+        aug_rng = augment_rng if train and self._token_augmenter is not None else None
+        prefix_tokens, prefix_mask, prefix_ar_mask = self.embed_prefix(observation, augment_rng=aug_rng)
         suffix_tokens, suffix_mask, suffix_ar_mask = self.embed_suffix(observation, x_t, time)
         input_mask = jnp.concatenate([prefix_mask, suffix_mask], axis=1)
         ar_mask = jnp.concatenate([prefix_ar_mask, suffix_ar_mask], axis=0)
@@ -272,7 +323,8 @@ class Pi0(_model.BaseModel):
         noise = jax.random.normal(rng, (batch_size, self.action_horizon, self.action_dim))
 
         # first fill KV cache with a forward pass of the prefix
-        prefix_tokens, prefix_mask, prefix_ar_mask = self.embed_prefix(observation)
+        # No augmentation during inference
+        prefix_tokens, prefix_mask, prefix_ar_mask = self.embed_prefix(observation, augment_rng=None)
         prefix_attn_mask = make_attn_mask(prefix_mask, prefix_ar_mask)
         positions = jnp.cumsum(prefix_mask, axis=1) - 1
         _, kv_cache = self.PaliGemma.llm([prefix_tokens, None], mask=prefix_attn_mask, positions=positions)
