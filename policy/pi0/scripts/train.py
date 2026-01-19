@@ -116,11 +116,11 @@ def init_train_state(
             state.replace_by_pure_dict(partial_params)
             model = nnx.merge(graphdef, state)
 
-        params = nnx.state(model, nnx.Param)
+        params = nnx.state(model)
         # Convert frozen params to bfloat16.
         params = nnx_utils.state_map(
             params,
-            config.freeze_filter,
+            nnx.All(config.freeze_filter, nnx.Param),
             lambda p: p.replace(p.value.astype(jnp.bfloat16)),
         )
 
@@ -131,7 +131,7 @@ def init_train_state(
             tx=tx,
             opt_state=tx.init(params.filter(config.trainable_filter)),
             ema_decay=config.ema_decay,
-            ema_params=None if config.ema_decay is None else params,
+            ema_params=None if config.ema_decay is None else params.filter(nnx.Param),
         )
 
     train_state_shape = jax.eval_shape(init, init_rng)
@@ -187,7 +187,7 @@ def train_step(
 
     # Update the model in place and return the new full state.
     nnx.update(model, new_params)
-    new_params = nnx.state(model, nnx.Param)
+    new_params = nnx.state(model)
 
     new_state = dataclasses.replace(state, step=state.step + 1, params=new_params, opt_state=new_opt_state)
     if state.ema_decay is not None:
@@ -196,7 +196,7 @@ def train_step(
             ema_params=jax.tree.map(
                 lambda old, new: state.ema_decay * old + (1 - state.ema_decay) * new,
                 state.ema_params,
-                new_params,
+                new_params.filter(nnx.Param),
             ),
         )
 
