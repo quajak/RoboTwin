@@ -511,7 +511,7 @@ _CONFIGS = [
             paligemma_variant="gemma_2b_lora",
             action_expert_variant="gemma_300m_lora",
             token_augmenter=pi0.TokenAugmenterConfig(
-                checkpoint_path="path/to/dit_checkpoint.pt",  # Update with actual path
+                checkpoint_path="/home/gerigkja/robustness-generation/checkpoints/head/checkpoint_790000.pt",  # Update with actual path
                 augment_cameras=["cam_high"],  # Cameras to augment
                 augment_probability=0.5,
                 num_steps=32,
@@ -526,7 +526,7 @@ _CONFIGS = [
             ),
         ),
         data=LeRobotAlohaDataConfig(
-            repo_id="test",  # your datasets repo_id
+            repo_id="demo_clean_repo",  # your datasets repo_id
             adapt_to_pi=False,
             repack_transforms=_transforms.Group(inputs=[
                 _transforms.RepackTransform({
