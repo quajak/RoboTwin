@@ -116,7 +116,7 @@ def init_train_state(
             state.replace_by_pure_dict(partial_params)
             model = nnx.merge(graphdef, state)
 
-        params = nnx.state(model)
+        params = nnx.state(model, nnx.Param)
         # Convert frozen params to bfloat16.
         params = nnx_utils.state_map(
             params,
@@ -187,7 +187,7 @@ def train_step(
 
     # Update the model in place and return the new full state.
     nnx.update(model, new_params)
-    new_params = nnx.state(model)
+    new_params = nnx.state(model, nnx.Param)
 
     new_state = dataclasses.replace(state, step=state.step + 1, params=new_params, opt_state=new_opt_state)
     if state.ema_decay is not None:
