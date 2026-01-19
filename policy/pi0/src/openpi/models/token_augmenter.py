@@ -6,15 +6,14 @@ during pi0 finetuning, with configurable camera selection and probabilistic appl
 
 import dataclasses
 from collections.abc import Sequence
-from typing import Any
 
-import flax.linen as nn
+import flax.nnx as nnx
 import jax
 import jax.numpy as jnp
 
 import openpi.shared.array_typing as at
 from openpi.models.dit_augmenter import DiT, solve_ode_flow_matching_jax
-from openpi.models.dit_weight_loader import load_pytorch_dit_weights
+from openpi.models.dit_weight_loader import load_dit_from_pytorch_checkpoint
 
 
 @dataclasses.dataclass(frozen=True)
@@ -49,38 +48,40 @@ class TokenAugmenterConfig:
     num_classes: int = 10
 
 
-class TokenAugmenter(nn.Module):
+class TokenAugmenter(nnx.Module):
     """Augments SigLIP tokens using a trained DiT model.
 
     This module wraps the DiT model and provides methods for augmenting
     image tokens during pi0 training.
     """
-    config: TokenAugmenterConfig
 
-    def setup(self):
-        self.dit = DiT(
-            input_size=self.config.input_size,
-            in_channels=self.config.in_channels,
-            hidden_size=self.config.hidden_size,
-            depth=self.config.depth,
-            num_heads=self.config.num_heads,
-            mlp_ratio=self.config.mlp_ratio,
-            num_classes=self.config.num_classes,
+    def __init__(self, config: TokenAugmenterConfig, rngs: nnx.Rngs):
+        self.config = config
+        
+        # Load DiT model from checkpoint
+        self.dit = load_dit_from_pytorch_checkpoint(
+            checkpoint_path=config.checkpoint_path,
+            input_size=config.input_size,
+            in_channels=config.in_channels,
+            hidden_size=config.hidden_size,
+            depth=config.depth,
+            num_heads=config.num_heads,
+            mlp_ratio=config.mlp_ratio,
+            num_classes=config.num_classes,
             dropout=0.0,
             ignore_dt=False,
+            rngs=rngs,
         )
 
     @at.typecheck
     def augment_tokens(
         self,
         tokens: at.Float[at.Array, "b l c"],
-        rng: at.KeyArrayLike | None = None
     ) -> at.Float[at.Array, "b l c"]:
         """Apply augmentation to tokens using flow matching ODE solver.
 
         Args:
             tokens: Input SigLIP tokens (batch, seq_len, dim)
-            rng: Optional random key (unused, for API consistency)
 
         Returns:
             Augmented tokens
@@ -131,47 +132,34 @@ class TokenAugmenter(nn.Module):
 
         return jax.lax.cond(
             should_augment,
-            lambda: self.augment_tokens(tokens, rng),
+            lambda: self.augment_tokens(tokens),
             lambda: tokens
         )
 
 
-def create_token_augmenter(config: TokenAugmenterConfig, rng: at.KeyArrayLike) -> tuple[TokenAugmenter, dict[str, Any]]:
+def create_token_augmenter(config: TokenAugmenterConfig, rngs: nnx.Rngs | None = None) -> TokenAugmenter:
     """Create and initialize a TokenAugmenter with weights from checkpoint.
 
     Args:
         config: TokenAugmenterConfig with model parameters and checkpoint path
-        rng: Random key for initialization
+        rngs: NNX random number generators (created if None)
 
     Returns:
-        Tuple of (model, variables dict with params)
+        TokenAugmenter NNX module with loaded weights
     """
-    augmenter = TokenAugmenter(config=config)
-
-    # Load PyTorch weights and convert
-    pytorch_params = load_pytorch_dit_weights(config.checkpoint_path)
-
-    # Convert numpy to jax arrays
-    import numpy as np
-    pytorch_params = jax.tree_util.tree_map(
-        lambda x: jnp.array(x) if isinstance(x, np.ndarray) else x,
-        pytorch_params
-    )
-
-    # Wrap in dit namespace to match module structure
-    params = {"dit": pytorch_params}
-
-    return augmenter, {"params": params}
+    if rngs is None:
+        rngs = nnx.Rngs(jax.random.key(0))
+    
+    return TokenAugmenter(config=config, rngs=rngs)
 
 
-def load_token_augmenter_from_config(config: TokenAugmenterConfig) -> tuple[TokenAugmenter, dict[str, Any]]:
+def load_token_augmenter_from_config(config: TokenAugmenterConfig) -> TokenAugmenter:
     """Convenience function to load a token augmenter from config.
 
     Args:
         config: TokenAugmenterConfig with all necessary parameters
 
     Returns:
-        Tuple of (model, variables)
+        TokenAugmenter NNX module
     """
-    rng = jax.random.key(0)  # Dummy key, not used for weight loading
-    return create_token_augmenter(config, rng)
+    return create_token_augmenter(config)

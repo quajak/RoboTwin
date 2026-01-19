@@ -12,7 +12,7 @@ from typing_extensions import override
 from openpi.models import model as _model
 import openpi.models.gemma as _gemma
 import openpi.models.siglip as _siglip
-from openpi.models.token_augmenter import TokenAugmenterConfig
+from openpi.models.token_augmenter import TokenAugmenterConfig, TokenAugmenter
 from openpi.shared import array_typing as at
 import openpi.shared.nnx_utils as nnx_utils
 
@@ -166,18 +166,17 @@ class Pi0(_model.BaseModel):
         self.action_time_mlp_out = nnx.Linear(action_expert_config.width, action_expert_config.width, rngs=rngs)
         self.action_out_proj = nnx.Linear(action_expert_config.width, config.action_dim, rngs=rngs)
 
-        # Initialize token augmenter if configured
+        # Initialize token augmenter if configured (now a proper NNX submodule)
         self._token_augmenter_config = config.token_augmenter
-        self._token_augmenter = None
-        self._token_augmenter_params = None
+        self._token_augmenter: TokenAugmenter | None = None
         if config.token_augmenter is not None:
-            self._init_token_augmenter(config.token_augmenter)
+            self._init_token_augmenter(config.token_augmenter, rngs)
 
-    def _init_token_augmenter(self, aug_config: TokenAugmenterConfig) -> None:
+    def _init_token_augmenter(self, aug_config: TokenAugmenterConfig, rngs: nnx.Rngs) -> None:
         """Initialize the token augmenter from config."""
-        from openpi.models.token_augmenter import load_token_augmenter_from_config
+        from openpi.models.token_augmenter import load_token_augmenter_from_config, TokenAugmenter
 
-        self._token_augmenter, self._token_augmenter_params = load_token_augmenter_from_config(aug_config)
+        self._token_augmenter = load_token_augmenter_from_config(aug_config)
         logger.info(f"Initialized token augmenter for cameras: {aug_config.augment_cameras}")
 
     @at.typecheck
@@ -240,7 +239,7 @@ class Pi0(_model.BaseModel):
         should_augment = jax.random.uniform(rng) < aug_config.augment_probability
 
         def augment_fn():
-            return self._token_augmenter.apply(self._token_augmenter_params, tokens, method="augment_tokens")
+            return self._token_augmenter.augment_tokens(tokens)
 
         return jax.lax.cond(should_augment, augment_fn, lambda: tokens)
 

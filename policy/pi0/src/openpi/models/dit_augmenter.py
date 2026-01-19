@@ -1,4 +1,4 @@
-"""JAX/Flax implementation of DiT model for token augmentation.
+"""JAX/Flax NNX implementation of DiT model for token augmentation.
 
 This module provides a JAX port of the PyTorch DiT model from src/models/dit.py,
 enabling seamless integration with the pi0 training pipeline.
@@ -7,7 +7,7 @@ enabling seamless integration with the pi0 training pipeline.
 import math
 from typing import Any
 
-import flax.linen as nn
+import flax.nnx as nnx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -45,152 +45,189 @@ def get_1d_sincos_pos_embed(embed_dim: int, length: int) -> jnp.ndarray:
     return emb[None, :, :]
 
 
-class TimestepEmbedder(nn.Module):
+class TimestepEmbedder(nnx.Module):
     """Embeds scalar timesteps into vector representations."""
-    hidden_size: int
-    frequency_embedding_size: int = 256
 
-    @nn.compact
+    def __init__(self, hidden_size: int, rngs: nnx.Rngs, frequency_embedding_size: int = 256):
+        self.hidden_size = hidden_size
+        self.frequency_embedding_size = frequency_embedding_size
+        self.mlp_0 = nnx.Linear(frequency_embedding_size, hidden_size, rngs=rngs)
+        self.mlp_2 = nnx.Linear(hidden_size, hidden_size, rngs=rngs)
+
     def __call__(self, t: jnp.ndarray) -> jnp.ndarray:
         t_freq = timestep_embedding(t, self.frequency_embedding_size)
-        x = nn.Dense(self.hidden_size, name="mlp_0")(t_freq)
-        x = nn.silu(x)
-        x = nn.Dense(self.hidden_size, name="mlp_2")(x)
+        x = self.mlp_0(t_freq)
+        x = nnx.silu(x)
+        x = self.mlp_2(x)
         return x
 
 
-class LabelEmbedder(nn.Module):
+class LabelEmbedder(nnx.Module):
     """Embeds class labels into vector representations."""
-    num_classes: int
-    hidden_size: int
 
-    @nn.compact
-    def __call__(self, labels: jnp.ndarray) -> jnp.ndarray:
-        embedding_table = self.param(
-            "embedding_table",
-            nn.initializers.normal(stddev=0.02),
-            (self.num_classes + 1, self.hidden_size)
+    def __init__(self, num_classes: int, hidden_size: int, rngs: nnx.Rngs):
+        self.num_classes = num_classes
+        self.hidden_size = hidden_size
+        # Initialize embedding table with normal distribution
+        init_fn = nnx.initializers.normal(stddev=0.02)
+        self.embedding_table = nnx.Param(
+            init_fn(rngs.params(), (num_classes + 1, hidden_size))
         )
-        return embedding_table[labels]
+
+    def __call__(self, labels: jnp.ndarray) -> jnp.ndarray:
+        return self.embedding_table.value[labels]
 
 
-class InputEmbedder(nn.Module):
+class InputEmbedder(nnx.Module):
     """Projects input tokens to hidden dimension."""
-    hidden_size: int
 
-    @nn.compact
+    def __init__(self, in_channels: int, hidden_size: int, rngs: nnx.Rngs):
+        self.proj = nnx.Linear(in_channels, hidden_size, rngs=rngs)
+
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
-        return nn.Dense(self.hidden_size, name="proj")(x)
+        return self.proj(x)
 
 
-class MlpBlock(nn.Module):
+class MlpBlock(nnx.Module):
     """Transformer MLP / feed-forward block."""
-    hidden_size: int
-    mlp_ratio: float
-    dropout: float = 0.0
 
-    @nn.compact
-    def __call__(self, x: jnp.ndarray, deterministic: bool = True) -> jnp.ndarray:
-        mlp_hidden_dim = int(self.hidden_size * self.mlp_ratio)
-        x = nn.Dense(mlp_hidden_dim, name="fc1")(x)
-        x = nn.gelu(x)
-        x = nn.Dropout(rate=self.dropout, deterministic=deterministic)(x)
-        x = nn.Dense(self.hidden_size, name="fc2")(x)
-        x = nn.Dropout(rate=self.dropout, deterministic=deterministic)(x)
+    def __init__(self, hidden_size: int, mlp_ratio: float, rngs: nnx.Rngs, dropout: float = 0.0):
+        mlp_hidden_dim = int(hidden_size * mlp_ratio)
+        self.fc1 = nnx.Linear(hidden_size, mlp_hidden_dim, rngs=rngs)
+        self.fc2 = nnx.Linear(mlp_hidden_dim, hidden_size, rngs=rngs)
+        self.dropout = nnx.Dropout(rate=dropout, rngs=rngs)
+
+    def __call__(self, x: jnp.ndarray, *, deterministic: bool = True) -> jnp.ndarray:
+        x = self.fc1(x)
+        x = nnx.gelu(x)
+        x = self.dropout(x, deterministic=deterministic)
+        x = self.fc2(x)
+        x = self.dropout(x, deterministic=deterministic)
         return x
 
 
-class DiTBlock(nn.Module):
+class DiTBlock(nnx.Module):
     """A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning."""
-    hidden_size: int
-    num_heads: int
-    mlp_ratio: float = 4.0
-    dropout: float = 0.0
 
-    @nn.compact
-    def __call__(self, x: jnp.ndarray, c: jnp.ndarray, deterministic: bool = True) -> jnp.ndarray:
+    def __init__(self, hidden_size: int, num_heads: int, rngs: nnx.Rngs,
+                 mlp_ratio: float = 4.0, dropout: float = 0.0):
+        self.hidden_size = hidden_size
+        self.num_heads = num_heads
+
         # adaLN modulation
-        modulation = nn.silu(c)
-        modulation = nn.Dense(6 * self.hidden_size, name="adaLN_modulation_1")(modulation)
+        self.adaLN_modulation_1 = nnx.Linear(hidden_size, 6 * hidden_size, rngs=rngs)
+
+        # Layer norms (no learnable params, just normalization)
+        self.norm1 = nnx.LayerNorm(hidden_size, epsilon=1e-6, use_bias=False, use_scale=False, rngs=rngs)
+        self.norm2 = nnx.LayerNorm(hidden_size, epsilon=1e-6, use_bias=False, use_scale=False, rngs=rngs)
+
+        # Attention
+        self.attn = nnx.MultiHeadAttention(
+            num_heads=num_heads,
+            in_features=hidden_size,
+            dropout_rate=dropout,
+            rngs=rngs,
+        )
+
+        # MLP
+        self.mlp = MlpBlock(hidden_size, mlp_ratio, rngs, dropout=dropout)
+
+    def __call__(self, x: jnp.ndarray, c: jnp.ndarray, *, deterministic: bool = True) -> jnp.ndarray:
+        # adaLN modulation
+        modulation = nnx.silu(c)
+        modulation = self.adaLN_modulation_1(modulation)
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = jnp.split(modulation, 6, axis=-1)
 
         # Self-attention branch
-        x_norm1 = nn.LayerNorm(epsilon=1e-6, use_bias=False, use_scale=False, name="norm1")(x)
+        x_norm1 = self.norm1(x)
         x_modulated1 = modulate(x_norm1, shift_msa, scale_msa)
-        attn_output = nn.MultiHeadDotProductAttention(
-            num_heads=self.num_heads,
-            dropout_rate=self.dropout,
-            deterministic=deterministic,
-            name="attn"
-        )(x_modulated1, x_modulated1)
+        attn_output = self.attn(x_modulated1, deterministic=deterministic)
         x = x + gate_msa[:, None, :] * attn_output
 
         # MLP branch
-        x_norm2 = nn.LayerNorm(epsilon=1e-6, use_bias=False, use_scale=False, name="norm2")(x)
+        x_norm2 = self.norm2(x)
         x_modulated2 = modulate(x_norm2, shift_mlp, scale_mlp)
-        mlp_output = MlpBlock(
-            hidden_size=self.hidden_size,
-            mlp_ratio=self.mlp_ratio,
-            dropout=self.dropout,
-            name="mlp"
-        )(x_modulated2, deterministic=deterministic)
+        mlp_output = self.mlp(x_modulated2, deterministic=deterministic)
         x = x + gate_mlp[:, None, :] * mlp_output
 
         return x
 
 
-class FinalLayer(nn.Module):
+class FinalLayer(nnx.Module):
     """The final layer of DiT."""
-    hidden_size: int
-    out_channels: int
 
-    @nn.compact
+    def __init__(self, hidden_size: int, out_channels: int, rngs: nnx.Rngs):
+        self.adaLN_modulation_1 = nnx.Linear(hidden_size, 2 * hidden_size, rngs=rngs)
+        self.norm_final = nnx.LayerNorm(hidden_size, epsilon=1e-6, use_bias=False, use_scale=False, rngs=rngs)
+        self.linear = nnx.Linear(hidden_size, out_channels, rngs=rngs)
+
     def __call__(self, x: jnp.ndarray, c: jnp.ndarray) -> jnp.ndarray:
-        modulation = nn.silu(c)
-        modulation = nn.Dense(2 * self.hidden_size, name="adaLN_modulation_1")(modulation)
+        modulation = nnx.silu(c)
+        modulation = self.adaLN_modulation_1(modulation)
         shift, scale = jnp.split(modulation, 2, axis=-1)
 
-        x = nn.LayerNorm(epsilon=1e-6, use_bias=False, use_scale=False, name="norm_final")(x)
+        x = self.norm_final(x)
         x = modulate(x, shift, scale)
-        x = nn.Dense(self.out_channels, name="linear")(x)
+        x = self.linear(x)
         return x
 
 
-class DiT(nn.Module):
+class DiT(nnx.Module):
     """Diffusion Transformer for token augmentation.
 
     Matches architecture of PyTorch DiT in src/models/dit.py.
     """
-    input_size: int
-    in_channels: int
-    hidden_size: int
-    depth: int
-    num_heads: int
-    mlp_ratio: float
-    num_classes: int
-    dropout: float = 0.0
-    ignore_dt: bool = False
 
-    def setup(self):
-        self.x_embedder = InputEmbedder(hidden_size=self.hidden_size, name="x_embedder")
-        self.t_embedder = TimestepEmbedder(hidden_size=self.hidden_size, name="t_embedder")
-        self.dt_embedder = TimestepEmbedder(hidden_size=self.hidden_size, name="dt_embedder")
-        self.y_embedder = LabelEmbedder(num_classes=self.num_classes, hidden_size=self.hidden_size, name="y_embedder")
+    def __init__(
+        self,
+        input_size: int,
+        in_channels: int,
+        hidden_size: int,
+        depth: int,
+        num_heads: int,
+        mlp_ratio: float,
+        num_classes: int,
+        rngs: nnx.Rngs,
+        dropout: float = 0.0,
+        ignore_dt: bool = False,
+    ):
+        self.input_size = input_size
+        self.in_channels = in_channels
+        self.hidden_size = hidden_size
+        self.depth = depth
+        self.num_heads = num_heads
+        self.mlp_ratio = mlp_ratio
+        self.num_classes = num_classes
+        self.dropout = dropout
+        self.ignore_dt = ignore_dt
 
+        # Embedders
+        self.x_embedder = InputEmbedder(in_channels, hidden_size, rngs)
+        self.t_embedder = TimestepEmbedder(hidden_size, rngs)
+        self.dt_embedder = TimestepEmbedder(hidden_size, rngs)
+        self.y_embedder = LabelEmbedder(num_classes, hidden_size, rngs)
+
+        # Positional embedding (frozen parameter)
+        self.pos_embed = nnx.Param(get_1d_sincos_pos_embed(hidden_size, input_size))
+
+        # Transformer blocks
         self.blocks = [
-            DiTBlock(
-                hidden_size=self.hidden_size,
-                num_heads=self.num_heads,
-                mlp_ratio=self.mlp_ratio,
-                dropout=self.dropout,
-                name=f"blocks_{i}"
-            )
-            for i in range(self.depth)
+            DiTBlock(hidden_size, num_heads, rngs, mlp_ratio, dropout)
+            for _ in range(depth)
         ]
-        self.final_layer = FinalLayer(hidden_size=self.hidden_size, out_channels=self.in_channels, name="final_layer")
 
-    @nn.compact
-    def __call__(self, x: jnp.ndarray, t: jnp.ndarray, dt: jnp.ndarray, y: jnp.ndarray, deterministic: bool = True) -> jnp.ndarray:
+        # Final layer
+        self.final_layer = FinalLayer(hidden_size, in_channels, rngs)
+
+    def __call__(
+        self,
+        x: jnp.ndarray,
+        t: jnp.ndarray,
+        dt: jnp.ndarray,
+        y: jnp.ndarray,
+        *,
+        deterministic: bool = True,
+    ) -> jnp.ndarray:
         """Forward pass matching PyTorch signature.
 
         Args:
@@ -200,14 +237,7 @@ class DiT(nn.Module):
             y: Class labels (N,)
             deterministic: Whether to use deterministic dropout
         """
-        # Positional embedding (frozen parameter)
-        pos_embed = self.param(
-            "pos_embed",
-            lambda rng, shape: get_1d_sincos_pos_embed(self.hidden_size, self.input_size),
-            (1, self.input_size, self.hidden_size)
-        )
-
-        x = self.x_embedder(x) + pos_embed
+        x = self.x_embedder(x) + self.pos_embed.value
 
         t_emb = self.t_embedder(t)
         if self.ignore_dt:
