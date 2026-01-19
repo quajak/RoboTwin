@@ -157,14 +157,18 @@ class CallbackRestore(ocp.args.CheckpointArgs):
 
 
 def _split_params(state: training_utils.TrainState, ) -> tuple[training_utils.TrainState, at.Params]:
+    # Filter out RngState from params, as it cannot be saved by orbax.
+    filtered_params = state.params.filter(nnx.Not(nnx.RngState))
+    
     if state.ema_params is not None:
         params = state.ema_params
-        train_state = dataclasses.replace(state, ema_params=None)
+        # Keep filtered params in train_state (they may still be serialized)
+        train_state = dataclasses.replace(state, params=filtered_params, ema_params=None)
     else:
-        params = state.params
+        params = filtered_params
         train_state = dataclasses.replace(state, params={})
 
-    # Filter out RngState, as it cannot be saved by orbax.
+    # Filter out RngState from the returned params as well.
     params = params.filter(nnx.Not(nnx.RngState))
     return train_state, params
 
