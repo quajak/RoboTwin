@@ -204,6 +204,9 @@ class Pi0(_model.BaseModel):
             if self._token_augmenter is not None and camera_rngs is not None:
                 image_tokens = self._maybe_augment_tokens(image_tokens, name, camera_rngs[idx])
 
+            # stop gradient into the visual encoder and possibly the augmenter (if enabled)
+            image_tokens = jax.lax.stop_gradient(image_tokens)
+
             tokens.append(image_tokens)
             input_mask.append(einops.repeat(
                 obs.image_masks[name],
