@@ -87,19 +87,31 @@ def _merge_params(loaded_params: at.Params, params: at.Params, *, missing_regex:
     Returns:
         A new dictionary with the merged parameters.
     """
-    flat_ref = flax.traverse_util.flatten_dict(params, sep="/")
-    flat_loaded = flax.traverse_util.flatten_dict(loaded_params, sep="/")
+    # Helper to stringify path for matching
+    def to_path(key_tuple):
+        return "/".join(str(k) for k in key_tuple)
+
+    flat_ref = flax.traverse_util.flatten_dict(params)
+    flat_loaded = flax.traverse_util.flatten_dict(loaded_params)
+
+    # map string path -> (original key, value) for ref
+    ref_map = {to_path(k): (k, v) for k, v in flat_ref.items()}
+
+    # map string path -> value for loaded
+    loaded_map = {to_path(k): v for k, v in flat_loaded.items()}
 
     # First, take all weights that are a subset of the reference weights.
     result = {}
-    for k, v in flat_loaded.items():
-        if k in flat_ref:
-            result[k] = v.astype(flat_ref[k].dtype)
+    for path, v in loaded_map.items():
+        if path in ref_map:
+            original_key, ref_val = ref_map[path]
+            result[original_key] = v.astype(ref_val.dtype)
 
     # Then, merge any missing weights as defined by the missing regex.
     pattern = re.compile(missing_regex)
-    for k in {k for k in flat_ref if pattern.fullmatch(k)}:
-        if k not in result:
-            result[k] = flat_ref[k]
+    for path, (original_key, ref_val) in ref_map.items():
+        if pattern.fullmatch(path):
+            if original_key not in result:
+                result[original_key] = ref_val
 
-    return flax.traverse_util.unflatten_dict(result, sep="/")
+    return flax.traverse_util.unflatten_dict(result)
