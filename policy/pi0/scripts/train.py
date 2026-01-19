@@ -116,7 +116,7 @@ def init_train_state(
             state.replace_by_pure_dict(partial_params)
             model = nnx.merge(graphdef, state)
 
-        params = nnx.state(model)
+        params = nnx.state(model, nnx.Param)
         # Convert frozen params to bfloat16.
         params = nnx_utils.state_map(
             params,
@@ -182,23 +182,12 @@ def train_step(
     loss, grads = nnx.value_and_grad(loss_fn, argnums=diff_state)(model, train_rng, observation, actions)
 
     params = state.params.filter(config.trainable_filter)
-    # Check for NaNs in grads and updates
-    # Use jax.lax.cond to avoid boolean conversion of traced arrays
-    def check_nans(grads, updates):
-        grad_nan = jnp.isnan(optax.global_norm(grads))
-        update_nan = jnp.isnan(optax.global_norm(updates))
-        return jnp.logical_or(grad_nan, update_nan)
-
-    nan_detected = check_nans(grads, updates)
-    def raise_nan_error(_):
-        raise ValueError("NaNs detected in gradients or updates during train_step.")
-    jax.lax.cond(nan_detected, raise_nan_error, lambda _: None, operand=None)
     updates, new_opt_state = state.tx.update(grads, state.opt_state, params)
     new_params = optax.apply_updates(params, updates)
 
     # Update the model in place and return the new full state.
     nnx.update(model, new_params)
-    new_params = nnx.state(model)
+    new_params = nnx.state(model, nnx.Param)
 
     new_state = dataclasses.replace(state, step=state.step + 1, params=new_params, opt_state=new_opt_state)
     if state.ema_decay is not None:
