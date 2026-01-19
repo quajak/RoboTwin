@@ -6,6 +6,8 @@ from typing import Protocol
 from etils import epath
 import jax
 import orbax.checkpoint as ocp
+import flax.nnx as nnx
+
 
 from openpi.shared import array_typing as at
 import openpi.shared.normalize as _normalize
@@ -161,6 +163,9 @@ def _split_params(state: training_utils.TrainState, ) -> tuple[training_utils.Tr
     else:
         params = state.params
         train_state = dataclasses.replace(state, params={})
+
+    # Filter out RngState, as it cannot be saved by orbax.
+    params = params.filter(nnx.Not(nnx.RngState))
     return train_state, params
 
 
